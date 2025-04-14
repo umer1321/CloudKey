@@ -3,20 +3,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class PaymentScreen extends StatelessWidget {
-  const PaymentScreen({super.key});
+  final String bookingId;
+  final double totalPrice;
+
+  const PaymentScreen({
+    super.key,
+    required this.bookingId,
+    required this.totalPrice,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Retrieve booking details from arguments
-    final Map<String, dynamic> args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    final String bookingId = args['bookingId'];
-    final double totalPrice = args['totalPrice'];
-
+    print('PaymentScreen accessed with bookingId: $bookingId, totalPrice: $totalPrice');
     final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
     Future<void> _processPayment(String method) async {
       try {
-        // Simulate payment processing (replace with actual payment gateway integration)
         DocumentReference paymentRef = await _firestore.collection('payments').add({
           'userId': FirebaseAuth.instance.currentUser!.uid,
           'amount': totalPrice,
@@ -25,7 +27,6 @@ class PaymentScreen extends StatelessWidget {
           'timestamp': Timestamp.now(),
         });
 
-        // Update the booking with the payment ID
         await _firestore.collection('bookings').doc(bookingId).update({
           'paymentId': paymentRef.id,
         });
@@ -34,7 +35,6 @@ class PaymentScreen extends StatelessWidget {
           const SnackBar(content: Text('Payment Successful!')),
         );
 
-        // Navigate back to HomeScreen
         Navigator.popUntil(context, (route) => route.settings.name == '/home');
       } catch (e) {
         print('Error processing payment: $e');
@@ -48,7 +48,6 @@ class PaymentScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Top bar with icons
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
             child: Row(
@@ -60,9 +59,7 @@ class PaymentScreen extends StatelessWidget {
                     color: Colors.brown,
                     size: 30,
                   ),
-                  onPressed: () {
-                    // Navigate to profile screen (placeholder)
-                  },
+                  onPressed: () {},
                 ),
                 IconButton(
                   icon: const Icon(
@@ -70,14 +67,11 @@ class PaymentScreen extends StatelessWidget {
                     color: Colors.brown,
                     size: 30,
                   ),
-                  onPressed: () {
-                    // Open drawer or menu (placeholder)
-                  },
+                  onPressed: () {},
                 ),
               ],
             ),
           ),
-          // Main content centered
           Expanded(
             child: Center(
               child: Padding(
@@ -85,7 +79,15 @@ class PaymentScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Payment icon
+                    Text(
+                      'Total Price: \$${totalPrice.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -99,7 +101,6 @@ class PaymentScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 40),
-                    // Payment options
                     _buildPaymentOption(
                       context: context,
                       icon: Icons.credit_card,
@@ -121,7 +122,6 @@ class PaymentScreen extends StatelessWidget {
                       onTap: () => _processPayment('PayPal'),
                     ),
                     const SizedBox(height: 30),
-                    // Secure Payment button
                     ElevatedButton(
                       onPressed: () => _processPayment('Default'),
                       style: ElevatedButton.styleFrom(
