@@ -1,20 +1,180 @@
 import 'package:flutter/material.dart';
+import 'Screens/payment_screen.dart';
 import 'Screens/splash_screen.dart';
 import 'Screens/start_screen.dart';
 import 'Screens/home_screen.dart';
 import 'Screens/booking_screen.dart';
-// Removed PaymentScreen import since it will be navigated to directly with arguments
-// import 'Screens/payment_screen.dart';
+import 'Screens/CheckInOutScreen.dart'; // For hotel check-in/check-out
+import 'Screens/BookingConfirmationScreen.dart'; // For hotel booking confirmation
+import 'Screens/CarRentalScreen.dart'; // For car rental browsing
+import 'Screens/CarReservationConfirmationScreen.dart'; // For car reservation confirmation
+import 'Screens/CarAccessScreen.dart'; // For car access with barcode
+import 'Screens/signup.dart'; // Added import for signup screen
+import 'Screens/GuestProfileScreen.dart';
 
 class Routes {
   static const String splash = '/splash';
   static const String auth = '/auth';
+  static const String signup = '/signup';
+  static const String home = '/home';
+  static const String booking = '/booking';
+  static const String digitalKey = '/digital_key'; // Keep the route name for consistency
+  static const String carRental = '/car_rental';
+  static const String carReservationConfirmation = '/car_reservation_confirmation';
+  static const String carAccess = '/car_access';
+  static const String hotelServices = '/hotel_services';
+  static const String payment = '/payment';
+  static const String bookingConfirmation = '/booking-confirmation';
+  static const String checkInOut = '/check_in_out';
+  static const String guestProfile = '/guest_profile';
+  static const String notifications = '/notifications';
+
+  static Map<String, WidgetBuilder> getRoutes() {
+    return {
+      splash: (context) => const SplashScreen(),
+      auth: (context) => const StartScreen(),
+      signup: (context) => const SignUpScreen(),
+      home: (context) => const HomeScreen(locale: '',),
+      booking: (context) => const BookingScreen(),
+      digitalKey: (context) {
+        // This route will be handled dynamically in HomeScreen.dart
+        // For now, redirect to a placeholder or handle it in the HomeScreen
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Please use the Digital Key button on the Home Screen.',
+              style: TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+      carRental: (context) => const CarRentalScreen(),
+      carReservationConfirmation: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('reservationId')) {
+          return CarReservationConfirmationScreen();
+        }
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Car Reservation Confirmation Screen requires a reservationId.',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+      carAccess: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('reservationId')) {
+          return CarAccessScreen(reservationId: args['reservationId'] as String);
+        }
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Car Access Screen requires a reservationId.',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+      hotelServices: (context) => const Scaffold(
+        body: Center(child: Text('Hotel Services Screen')),
+      ),
+      payment: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        return PaymentScreen(
+          transactionId: args?['transactionId'] ?? args?['reservationId'] ?? args?['bookingId'],
+          totalPrice: args?['totalPrice'],
+          isCarReservation: args?['isCarReservation'] ?? false,
+        );
+      },
+      bookingConfirmation: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('bookingId')) {
+          return BookingConfirmationScreen(bookingId: args['bookingId'] as String);
+        }
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Booking Confirmation Screen requires a bookingId.',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+      checkInOut: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('bookingId')) {
+          return CheckInOutScreen(bookingId: args['bookingId'] as String, locale: '',);
+        }
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Check-In/Out Screen requires a bookingId.',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+      guestProfile: (context) => const GuestProfileScreen(),
+    notifications: (context) => const Scaffold(
+    body: Center(child: Text('Notifications Screen')),
+     ),
+      };
+
+
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+///////////////
+/*
+import 'package:flutter/material.dart';
+import 'Screens/splash_screen.dart';
+import 'Screens/start_screen.dart';
+import 'Screens/home_screen.dart';
+import 'Screens/booking_screen.dart';
+import 'Screens/CheckInOutScreen.dart'; // For hotel check-in/check-out
+import 'Screens/BookingConfirmationScreen.dart'; // For hotel booking confirmation
+import 'Screens/CarRentalScreen.dart'; // For car rental browsing
+import 'Screens/CarReservationConfirmationScreen.dart'; // For car reservation confirmation
+import 'Screens/CarAccessScreen.dart'; // For car access with barcode
+import 'Screens/signup.dart'; // Added import for signup screen
+
+class Routes {
+  static const String splash = '/splash';
+  static const String auth = '/auth';
+  static const String signup = '/signup'; // Added signup route
   static const String home = '/home';
   static const String bookings = '/bookings';
   static const String digitalKey = '/digital_key';
   static const String carRental = '/car_rental';
+  static const String carReservationConfirmation = '/car_reservation_confirmation';
+  static const String carAccess = '/car_access';
   static const String hotelServices = '/hotel_services';
-  static const String payment = '/payment'; // Keep the route name for reference, but won't be used directly
+  static const String payment = '/payment';
+  static const String bookingConfirmation = '/booking_confirmation';
+  static const String checkInOut = '/check_in_out';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -22,6 +182,8 @@ class Routes {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case auth:
         return MaterialPageRoute(builder: (_) => const StartScreen());
+      case signup:
+        return MaterialPageRoute(builder: (_) => const SignUpScreen()); // Added case for signup
       case home:
         return MaterialPageRoute(builder: (_) => const HomeScreen());
       case bookings:
@@ -34,8 +196,46 @@ class Routes {
         );
       case carRental:
         return MaterialPageRoute(
+          builder: (_) => const CarRentalScreen(),
+        );
+      case carReservationConfirmation:
+      // Extract reservationId from arguments
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('reservationId')) {
+          return MaterialPageRoute(
+            builder: (_) => CarReservationConfirmationScreen(),
+          );
+        }
+        return MaterialPageRoute(
           builder: (_) => const Scaffold(
-            body: Center(child: Text('Car Rental Screen')),
+            body: Center(
+              child: Text(
+                'Car Reservation Confirmation Screen requires a reservationId.',
+                style: TextStyle(color: Colors.red, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      case carAccess:
+      // Extract reservationId from arguments
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('reservationId')) {
+          return MaterialPageRoute(
+            builder: (_) => CarAccessScreen(
+              reservationId: args['reservationId'] as String,
+            ),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => const Scaffold(
+            body: Center(
+              child: Text(
+                'Car Access Screen requires a reservationId.',
+                style: TextStyle(color: Colors.red, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+            ),
           ),
         );
       case hotelServices:
@@ -46,14 +246,55 @@ class Routes {
         );
       case payment:
       // Since PaymentScreen requires constructor arguments (bookingId and totalPrice),
-      // it cannot be instantiated directly here. Instead, navigation to PaymentScreen
+      // it cannot be instantiated directly here. Navigation to PaymentScreen
       // should be handled via Navigator.push with the required arguments.
-      // For now, we'll redirect to a placeholder or error screen if this route is accessed directly.
         return MaterialPageRoute(
           builder: (_) => const Scaffold(
             body: Center(
               child: Text(
-                'Payment Screen cannot be accessed directly. Please book a hotel first.',
+                'Payment Screen cannot be accessed directly. Please book a hotel or car first.',
+                style: TextStyle(color: Colors.red, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      case bookingConfirmation:
+      // Extract bookingId from arguments
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('bookingId')) {
+          return MaterialPageRoute(
+            builder: (_) => BookingConfirmationScreen(
+              bookingId: args['bookingId'] as String,
+            ),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => const Scaffold(
+            body: Center(
+              child: Text(
+                'Booking Confirmation Screen requires a bookingId.',
+                style: TextStyle(color: Colors.red, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      case checkInOut:
+      // Extract bookingId from arguments
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('bookingId')) {
+          return MaterialPageRoute(
+            builder: (_) => CheckInOutScreen(
+              bookingId: args['bookingId'] as String,
+            ),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => const Scaffold(
+            body: Center(
+              child: Text(
+                'Check-In/Out Screen requires a bookingId.',
                 style: TextStyle(color: Colors.red, fontSize: 18),
                 textAlign: TextAlign.center,
               ),
@@ -68,4 +309,4 @@ class Routes {
         );
     }
   }
-}
+}*/

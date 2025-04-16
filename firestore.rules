@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection: Users can only read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rooms collection: Publicly readable, writes restricted to server-side
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Bookings collection: Users can only read/write their own bookings
+    match /bookings/{bookingId} {
+      // Allow read if the userId in the document matches the authenticated user's UID
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow create if the userId in the incoming document matches the authenticated user's UID
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow update if the userId in the existing document matches the authenticated user's UID
+      // and the userId isn't being changed
+      allow update: if request.auth != null &&
+                    resource.data.userId == request.auth.uid &&
+                    (request.resource.data.userId == resource.data.userId || !request.resource.data.keys().hasAny(['userId']));
+    }
+
+    // Payments collection: Users can only read/write their own payments
+    match /payments/{paymentId} {
+      // Allow read if the userId in the document matches the authenticated user's UID
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow write if the userId in the incoming document matches the authenticated user's UID
+      allow write: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Notifications collection: Users can read their own notifications, writes restricted to server-side
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Car Reservations collection: Users can only read/write their own car reservations
+    match /car_reservations/{reservationId} {
+      // Allow read if the userId in the document matches the authenticated user's UID
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow create if the userId in the incoming document matches the authenticated user's UID
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Allow update if the userId in the existing document matches the authenticated user's UID
+      // and the userId isn't being changed
+      allow update: if request.auth != null &&
+                    resource.data.userId == request.auth.uid &&
+                    (request.resource.data.userId == resource.data.userId || !request.resource.data.keys().hasAny(['userId']));
+      // Allow delete if the userId in the document matches the authenticated user's UID
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Temporary rule for testing: Allow all access to car_reservations (remove in production)
+    match /car_reservations/{reservationId} {
+      allow read, write: if true; // Temporarily allow all for testing
+    }
+  }
+}
