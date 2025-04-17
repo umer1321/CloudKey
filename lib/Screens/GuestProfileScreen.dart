@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/translations.dart'; // Assuming this file contains the Translations class
 
 class GuestProfileScreen extends StatefulWidget {
   const GuestProfileScreen({super.key});
@@ -18,8 +21,12 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   String? _roomTypePreference;
   bool _accessibility = false;
   String? _bedConfiguration;
-  bool _spaService = false;
-  bool _restaurantService = false;
+  final Map<String, bool> _services = {
+    'Spa': false,
+    'Restaurant': false,
+    'Room Service': false,
+    'Concierge': false,
+  };
 
   // Personalized recommendations
   String? _recommendedRoomType;
@@ -27,11 +34,26 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _userAvatar;
+  String _userName = '';
+  int _totalBookings = 0;
+  int _loyaltyPoints = 0;
+
+  final _formKey = GlobalKey<FormState>();
+  String _locale = 'en-gb'; // Default locale
 
   @override
   void initState() {
     super.initState();
+    _loadLocale();
     _loadUserProfile();
+  }
+
+  Future<void> _loadLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _locale = prefs.getString('locale') ?? 'en-gb';
+    });
   }
 
   Future<void> _loadUserProfile() async {
@@ -46,37 +68,40 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
         return;
       }
 
-      // Load user profile from Firestore
-      DocumentSnapshot userDoc =
-      await _firestore.collection('users').doc(user.uid).get();
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
         _emailController.text = data['email'] ?? user.email ?? '';
         _roomTypePreference = data['roomTypePreference'] ?? 'Single';
-        Map<String, dynamic> specialRequests =
-            data['specialRequests'] ?? {'accessibility': false, 'bedConfiguration': 'Single'};
+        _userName = data['name'] ?? user.displayName ?? 'Guest';
+        _userAvatar = data['avatar'];
+        _loyaltyPoints = data['loyaltyPoints'] ?? 0;
+
+        Map<String, dynamic> specialRequests = data['specialRequests'] ?? {'accessibility': false, 'bedConfiguration': 'Single'};
         _accessibility = specialRequests['accessibility'] ?? false;
         _bedConfiguration = specialRequests['bedConfiguration'] ?? 'Single';
+
         List<dynamic> repeatServices = data['repeatServices'] ?? [];
-        _spaService = repeatServices.contains('Spa');
-        _restaurantService = repeatServices.contains('Restaurant');
+        for (String service in _services.keys) {
+          _services[service] = repeatServices.contains(service);
+        }
       } else {
-        // If user document doesn't exist, create one with default values
         await _firestore.collection('users').doc(user.uid).set({
           'email': user.email,
+          'name': user.displayName ?? 'Guest',
           'roomTypePreference': 'Single',
           'specialRequests': {'accessibility': false, 'bedConfiguration': 'Single'},
           'repeatServices': [],
+          'loyaltyPoints': 0,
+          'createdAt': FieldValue.serverTimestamp(),
         });
         _emailController.text = user.email ?? '';
         _roomTypePreference = 'Single';
         _accessibility = false;
         _bedConfiguration = 'Single';
-        _spaService = false;
-        _restaurantService = false;
+        _userName = user.displayName ?? 'Guest';
       }
 
-      // Load personalized recommendations based on booking history
       await _loadPersonalizedRecommendations(user.uid);
 
       setState(() {
@@ -88,44 +113,50 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading profile: $e')),
+        SnackBar(
+          content: Text(Translations.translate('error_loading_profile', _locale) + ': $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
 
   Future<void> _loadPersonalizedRecommendations(String userId) async {
     try {
-      // Fetch the user's booking history
       QuerySnapshot bookingSnapshot = await _firestore
           .collection('bookings')
           .where('userId', isEqualTo: userId)
           .orderBy('checkInDate', descending: true)
           .get();
 
+      _totalBookings = bookingSnapshot.docs.length;
+
       if (bookingSnapshot.docs.isNotEmpty) {
-        // Analyze booking history for recommendations
         Map<String, int> roomTypeCounts = {};
-        Map<String, int> serviceCounts = {'Spa': 0, 'Restaurant': 0};
+        Map<String, int> serviceCounts = {};
+        for (var service in _services.keys) {
+          serviceCounts[service] = 0;
+        }
 
         for (var doc in bookingSnapshot.docs) {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          String roomType = data['roomType'] ?? 'Single'; // Adjust based on your booking data
+          String roomType = data['roomType'] ?? 'Single';
           roomTypeCounts[roomType] = (roomTypeCounts[roomType] ?? 0) + 1;
 
-          // Check for services in booking history (e.g., from hotelServices field if available)
           List<dynamic> bookedServices = data['hotelServices'] ?? [];
-          if (bookedServices.contains('Spa')) serviceCounts['Spa'] = serviceCounts['Spa']! + 1;
-          if (bookedServices.contains('Restaurant')) {
-            serviceCounts['Restaurant'] = serviceCounts['Restaurant']! + 1;
+          for (var service in bookedServices) {
+            if (serviceCounts.containsKey(service)) {
+              serviceCounts[service] = serviceCounts[service]! + 1;
+            }
           }
         }
 
-        // Recommend the most frequently booked room type
-        _recommendedRoomType = roomTypeCounts.entries
-            .reduce((a, b) => a.value > b.value ? a : b)
-            .key;
+        if (roomTypeCounts.isNotEmpty) {
+          _recommendedRoomType = roomTypeCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+        }
 
-        // Recommend services that have been booked at least once
         _recommendedServices = serviceCounts.entries
             .where((entry) => entry.value > 0)
             .map((entry) => entry.key)
@@ -137,6 +168,10 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    if (_formKey.currentState?.validate() != true) {
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -148,12 +183,12 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
         return;
       }
 
-      // Prepare the data to save
-      List<String> repeatServices = [];
-      if (_spaService) repeatServices.add('Spa');
-      if (_restaurantService) repeatServices.add('Restaurant');
+      List<String> repeatServices = _services.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
 
-      await _firestore.collection('users').doc(user.uid).set({
+      await _firestore.collection('users').doc(user.uid).update({
         'email': _emailController.text,
         'roomTypePreference': _roomTypePreference,
         'specialRequests': {
@@ -161,15 +196,23 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
           'bedConfiguration': _bedConfiguration,
         },
         'repeatServices': repeatServices,
-      }, SetOptions(merge: true));
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
+        SnackBar(
+          content: Text(Translations.translate('profile_updated', _locale)),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
       print('Error saving profile: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving profile: $e')),
+        SnackBar(
+          content: Text(Translations.translate('error_saving_profile', _locale) + ': $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() {
@@ -184,49 +227,144 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Guest Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _isSaving ? null : _saveProfile,
+  Widget _buildSectionHeader(String title, [IconData? icon]) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            Translations.translate(title, _locale),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).primaryColor,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Divider(color: Theme.of(context).primaryColor.withOpacity(0.3)),
           ),
         ],
       ),
-      body: SingleChildScrollView(
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                  backgroundImage: _userAvatar != null ? NetworkImage(_userAvatar!) : null,
+                  child: _userAvatar == null
+                      ? Text(
+                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'G',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _userName,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _emailController.text,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatsItem(Translations.translate('total_bookings', _locale), _totalBookings.toString()),
+                _buildStatsItem(Translations.translate('loyalty_points', _locale), _loyaltyPoints.toString()),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsItem(String label, String value) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).primaryColor,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomPreference() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Email (read-only for now)
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-              readOnly: true,
+            Text(
+              Translations.translate('room_type_preference', _locale),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
-            const SizedBox(height: 20),
-
-            // Room Type Preference
-            const Text(
-              'Room Type Preference',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            DropdownButton<String>(
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
               value: _roomTypePreference,
               isExpanded: true,
-              items: ['Single', 'Double', 'Suite'].map((String value) {
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(),
+              ),
+              items: ['Single', 'Double', 'Twin', 'Deluxe', 'Suite', 'Presidential Suite']
+                  .map((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
                   child: Text(value),
@@ -238,27 +376,48 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
                 });
               },
             ),
-            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Special Requests
-            const Text(
-              'Special Requests',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            CheckboxListTile(
-              title: const Text('Accessibility Features'),
+  Widget _buildSpecialRequests() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              title: Text(Translations.translate('accessibility_features', _locale)),
+              subtitle: Text(Translations.translate('wheelchair_access', _locale)),
               value: _accessibility,
+              activeColor: Theme.of(context).primaryColor,
+              contentPadding: EdgeInsets.zero,
               onChanged: (value) {
                 setState(() {
-                  _accessibility = value ?? false;
+                  _accessibility = value;
                 });
               },
             ),
-            const Text('Bed Configuration'),
-            DropdownButton<String>(
+            const Divider(),
+            Text(
+              Translations.translate('bed_configuration', _locale),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
               value: _bedConfiguration,
               isExpanded: true,
-              items: ['Single', 'Queen', 'King'].map((String value) {
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(),
+              ),
+              items: ['Single', 'Twin', 'Queen', 'King', 'California King']
+                  .map((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
                   child: Text(value),
@@ -270,49 +429,216 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
                 });
               },
             ),
-            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Repeat Services
-            const Text(
-              'Repeat Services',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  Widget _buildServicesGrid() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              Translations.translate('preferred_services', _locale),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
-            CheckboxListTile(
-              title: const Text('Spa'),
-              value: _spaService,
-              onChanged: (value) {
-                setState(() {
-                  _spaService = value ?? false;
-                });
-              },
+            const SizedBox(height: 8),
+            GridView.count(
+              crossAxisCount: 2,
+              childAspectRatio: 3,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: _services.entries.map((entry) {
+                return CheckboxListTile(
+                  title: Text(entry.key),
+                  value: entry.value,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  activeColor: Theme.of(context).primaryColor,
+                  onChanged: (value) {
+                    setState(() {
+                      _services[entry.key] = value ?? false;
+                    });
+                  },
+                );
+              }).toList(),
             ),
-            CheckboxListTile(
-              title: const Text('Restaurant'),
-              value: _restaurantService,
-              onChanged: (value) {
-                setState(() {
-                  _restaurantService = value ?? false;
-                });
-              },
-            ),
-            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Personalized Recommendations
-            const Text(
-              'Personalized Recommendations',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+  Widget _buildRecommendations() {
+    if (_recommendedRoomType == null && _recommendedServices.isEmpty) {
+      return Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                Translations.translate('no_recommendations', _locale),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                Translations.translate('make_booking_for_suggestions', _locale),
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      color: Theme.of(context).primaryColor.withOpacity(0.05),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             if (_recommendedRoomType != null) ...[
-              Text('Recommended Room Type: $_recommendedRoomType'),
-              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    Icons.hotel,
+                    color: Theme.of(context).primaryColor,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    Translations.translate('recommended_room', _locale) + ': $_recommendedRoomType',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
             ],
             if (_recommendedServices.isNotEmpty) ...[
-              Text('Recommended Services: ${_recommendedServices.join(', ')}'),
-            ],
-            if (_recommendedRoomType == null && _recommendedServices.isEmpty) ...[
-              const Text('No recommendations available. Make a booking to get personalized suggestions.'),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.star,
+                    color: Theme.of(context).primaryColor,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          Translations.translate('recommended_services', _locale),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _recommendedServices.map((service) {
+                            return Chip(
+                              label: Text(service),
+                              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                              labelStyle: TextStyle(color: Theme.of(context).primaryColor),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(height: 16),
+              Text(Translations.translate('loading_profile', _locale)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final TextDirection textDirection = _locale == 'ar' ? TextDirection.rtl : TextDirection.ltr;
+
+    return Directionality(
+      textDirection: textDirection,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(Translations.translate('guest_profile', _locale)),
+          elevation: 0,
+          actions: [
+            _isSaving
+                ? Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            )
+                : TextButton.icon(
+              icon: const Icon(Icons.save),
+              label: Text(Translations.translate('save', _locale)),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
+              onPressed: _saveProfile,
+            ),
+          ],
+        ),
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              _buildProfileHeader(),
+              _buildSectionHeader('Preferences', Icons.settings),
+              _buildRoomPreference(),
+              _buildSectionHeader('Special Requests', Icons.request_page),
+              _buildSpecialRequests(),
+              _buildSectionHeader('Services', Icons.room_service),
+              _buildServicesGrid(),
+              _buildSectionHeader('Personalized For You', Icons.thumb_up),
+              _buildRecommendations(),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );

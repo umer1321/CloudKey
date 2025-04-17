@@ -11,9 +11,18 @@ import 'Screens/CarReservationConfirmationScreen.dart'; // For car reservation c
 import 'Screens/CarAccessScreen.dart'; // For car access with barcode
 import 'Screens/signup.dart'; // Added import for signup screen
 import 'Screens/GuestProfileScreen.dart';
+import 'Screens/LanguageSelectionScreen.dart';
+import 'Screens/NotificationsScreen.dart';
+import 'screens/ServicesScreen.dart';
+import 'screens/AccountManagementScreen.dart';
+import 'Screens/ReservationScreen.dart';
+import 'Screens/HotelMapScreen.dart';
+import 'Screens/EmergencySupportScreen.dart';
+import 'Screens/RatingAndReviewScreen.dart';
 
 class Routes {
   static const String splash = '/splash';
+  static const String languageSelection = '/language_selection';
   static const String auth = '/auth';
   static const String signup = '/signup';
   static const String home = '/home';
@@ -28,17 +37,21 @@ class Routes {
   static const String checkInOut = '/check_in_out';
   static const String guestProfile = '/guest_profile';
   static const String notifications = '/notifications';
+  static const String accountManagement = '/account_management';
+  static const String reservation = '/reservation';
+  static const String hotelMap = '/hotel_map';
+  static const String emergencySupport = '/emergency_support';
+  static const String ratingAndReview = '/rating_and_review';
 
   static Map<String, WidgetBuilder> getRoutes() {
     return {
       splash: (context) => const SplashScreen(),
+      languageSelection: (context) => const LanguageSelectionScreen(),
       auth: (context) => const StartScreen(),
       signup: (context) => const SignUpScreen(),
-      home: (context) => const HomeScreen(locale: '',),
+      home: (context) => const HomeScreen(),
       booking: (context) => const BookingScreen(),
       digitalKey: (context) {
-        // This route will be handled dynamically in HomeScreen.dart
-        // For now, redirect to a placeholder or handle it in the HomeScreen
         return const Scaffold(
           body: Center(
             child: Text(
@@ -53,7 +66,7 @@ class Routes {
       carReservationConfirmation: (context) {
         final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('reservationId')) {
-          return CarReservationConfirmationScreen();
+          return const CarReservationConfirmationScreen();
         }
         return const Scaffold(
           body: Center(
@@ -80,9 +93,7 @@ class Routes {
           ),
         );
       },
-      hotelServices: (context) => const Scaffold(
-        body: Center(child: Text('Hotel Services Screen')),
-      ),
+      hotelServices: (context) => const ServicesScreen(), // Updated to point to ServicesScreen
       payment: (context) {
         final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
         return PaymentScreen(
@@ -109,7 +120,7 @@ class Routes {
       checkInOut: (context) {
         final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
         if (args != null && args.containsKey('bookingId')) {
-          return CheckInOutScreen(bookingId: args['bookingId'] as String, locale: '',);
+          return CheckInOutScreen(bookingId: args['bookingId'] as String, locale: '');
         }
         return const Scaffold(
           body: Center(
@@ -122,12 +133,27 @@ class Routes {
         );
       },
       guestProfile: (context) => const GuestProfileScreen(),
-    notifications: (context) => const Scaffold(
-    body: Center(child: Text('Notifications Screen')),
-     ),
-      };
-
-
+      notifications: (context) => const NotificationsScreen(),
+      accountManagement: (context) => const AccountManagementScreen(),
+      reservation: (context) => const ReservationScreen(),
+      hotelMap: (context) => const HotelMapScreen(),
+      emergencySupport: (context) => const EmergencySupportScreen(),
+      ratingAndReview: (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('bookingId')) {
+          return RatingAndReviewScreen(bookingId: args['bookingId'] as String);
+        }
+        return const Scaffold(
+          body: Center(
+            child: Text(
+              'Rating and Review Screen requires a bookingId.',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
+    };
   }
 }
 

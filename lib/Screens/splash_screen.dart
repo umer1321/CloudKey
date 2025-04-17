@@ -31,7 +31,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     // Navigate after 3 seconds
     Timer(const Duration(seconds: 3), () {
-      Navigator.pushReplacementNamed(context, Routes.auth);
+      Navigator.pushReplacementNamed(context, Routes.languageSelection);
     });
   }
 
@@ -127,7 +127,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         ),
                         InkWell(
                           onTap: () {
-                            Navigator.pushReplacementNamed(context, Routes.auth);
+                            Navigator.pushReplacementNamed(context, Routes.languageSelection);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 10),
