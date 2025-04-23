@@ -1,8 +1,12 @@
+/*
+import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../routes.dart';
 import '../utils/translations.dart';
 
@@ -65,6 +69,8 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     },
   ];
 
+
+
   Future<void> _fetchCars() async {
     setState(() {
       isLoading = true;
@@ -72,14 +78,49 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     });
 
     try {
-      await Future.delayed(const Duration(seconds: 1));
-      setState(() {
-        cars = mockCars;
-        isLoading = false;
-        if (cars.isNotEmpty) {
-          print('First Car Data: ${cars[0]}');
-        }
+      final String apiKey = dotenv.env['RAPIDAPI_KEY'] ?? '';
+      final String apiHost = dotenv.env['CAR_RENTAL_RAPIDAPI_HOST'] ?? '';
+
+      if (apiKey.isEmpty || apiHost.isEmpty) {
+        throw Exception('API key or car rental host not found in .env file');
+      }
+
+      final Uri url = Uri.parse('https://$apiHost/search-car-rentals').replace(queryParameters: {
+        'city': city,
+        'pickup_date': _formatDate(selectedDateRange?.start ?? DateTime.now()),
+        'dropoff_date': _formatDate(selectedDateRange?.end ?? DateTime.now().add(Duration(days: 1))),
+        'currency': 'USD',
       });
+
+      print('Fetching cars from URL: $url');
+
+      final response = await http.get(url, headers: {
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': apiHost,
+      });
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body)['results'] ?? [];
+        setState(() {
+          cars = data.map((car) => {
+            'id': car['id'].toString(),
+            'name': car['vehicle_name'] ?? 'Unknown Car',
+            'color': car['color'] ?? 'Unknown',
+            'serialNumber': car['serial_number'] ?? 'N/A',
+            'pricePerDay': car['price_per_day']?.toDouble() ?? 0.0,
+            'imageUrl': car['image_url'] ?? placeholderImages[Random().nextInt(placeholderImages.length)],
+          }).toList();
+          isLoading = false;
+          if (cars.isNotEmpty) {
+            print('First Car Data: ${cars[0]}');
+          }
+        });
+      } else {
+        throw Exception('Failed to fetch cars: ${response.statusCode} - ${response.body}');
+      }
     } catch (e) {
       print('Error fetching cars: $e');
       setState(() {
@@ -92,6 +133,71 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
       );
     }
   }
+*/
+/*  Future<void> _fetchCars() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final String apiKey = dotenv.env['RAPIDAPI_KEY'] ?? '';
+      final String apiHost = dotenv.env['CAR_RENTAL_RAPIDAPI_HOST'] ?? '';
+
+      // Ensure API key and host are loaded
+      if (apiKey.isEmpty || apiHost.isEmpty) {
+        throw Exception('API key or car rental host not found in .env file');
+      }
+
+      // Car rental API endpoint (adjust based on actual API)
+      final Uri url = Uri.parse('https://$apiHost/v1/cars').replace(queryParameters: {
+        'city': city,
+        'start_date': _formatDate(selectedDateRange?.start ?? DateTime.now()),
+        'end_date': _formatDate(selectedDateRange?.end ?? DateTime.now().add(Duration(days: 1))),
+      });
+
+      print('Fetching cars from URL: $url'); // Debug URL
+
+      final response = await http.get(url, headers: {
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': apiHost,
+      });
+
+      print('Response status: ${response.statusCode}'); // Debug status
+      print('Response body: ${response.body}'); // Debug response
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          cars = data.map((car) => {
+            'id': car['id'].toString(),
+            'name': car['name'] ?? 'Unknown Car',
+            'color': car['color'] ?? 'Unknown',
+            'serialNumber': car['serial_number'] ?? 'N/A',
+            'pricePerDay': car['price_per_day']?.toDouble() ?? 0.0,
+            'imageUrl': car['image_url'] ?? placeholderImages[Random().nextInt(placeholderImages.length)],
+          }).toList();
+          isLoading = false;
+          if (cars.isNotEmpty) {
+            print('First Car Data: ${cars[0]}');
+          }
+        });
+      } else {
+        throw Exception('Failed to fetch cars: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching cars: $e');
+      setState(() {
+        isLoading = false;
+        cars = mockCars; // Fallback to mock data
+        errorMessage = Translations.translate('failed_to_fetch_cars', _locale) + ' $city: $e. ' + Translations.translate('using_mock_data', _locale);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage!)),
+      );
+    }
+  }*//*
+
 
   Future<void> _selectDateRange(BuildContext context) async {
     final DateTimeRange? picked = await showDateRangePicker(
@@ -444,6 +550,7 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     );
   }
 }
+*/
 
 
 
@@ -451,7 +558,6 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
 
 //////////////
 
-/*
 import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -459,6 +565,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 import '../routes.dart';
 
 class CarRentalScreen extends StatefulWidget {
@@ -476,27 +583,34 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
   bool isLoading = false;
   String? errorMessage;
   bool hasFetchedCars = false;
+  int currentPage = 1;
+  bool hasMoreData = true;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  late String carRentalApiHost;
+  ScrollController _scrollController = ScrollController();
 
-  final String apiHost = 'booking-com15.p.rapidapi.com';
+  final Map<String, Map<String, double>> cityCoordinates = {
+    'Riyadh': {
+      'latitude': 24.7136,
+      'longitude': 46.6753,
+    },
+  };
 
   final List<dynamic> mockCars = [
     {
       'id': 'car1',
       'name': 'Nissan',
-      'color': 'Black',
       'serialNumber': 'G 30',
       'pricePerDay': 50.0,
-      'imageUrl': 'https://example.com/nissan.jpg',
+      'imageUrl': 'assets/images/car1.jpg',
     },
     {
       'id': 'car2',
       'name': 'Toyota',
-      'color': 'White',
       'serialNumber': 'H 45',
       'pricePerDay': 60.0,
-      'imageUrl': 'https://example.com/toyota.jpg',
+      'imageUrl': 'assets/images/car2.jpg',
     },
   ];
 
@@ -505,11 +619,34 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     'assets/images/car2.jpg',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    carRentalApiHost = dotenv.env['CAR_RENTAL_API_HOST'] ?? 'booking-com.p.rapidapi.com';
+    final now = DateTime.now();
+    selectedDateRange = DateTimeRange(
+      start: now.add(Duration(days: 1)),
+      end: now.add(Duration(days: 2)),
+    );
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent && !isLoading) {
+        _fetchCars(dotenv.env['CAR_RENTAL_API_KEY']!, loadMore: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<String> _loadApiKey() async {
     try {
-      final apiKey = dotenv.env['RAPIDAPI_KEY'];
+      final apiKey = dotenv.env['CAR_RENTAL_API_KEY'];
       if (apiKey == null || apiKey.isEmpty) {
-        throw Exception('RAPIDAPI_KEY not found in .env file.');
+        throw Exception('CAR_RENTAL_API_KEY not found in .env file.');
       }
       return apiKey;
     } catch (e) {
@@ -518,66 +655,113 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     }
   }
 
-  Future<void> _fetchCars(String apiKey) async {
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
+  Future<void> _fetchCars(String apiKey, {bool loadMore = false}) async {
+    if (!loadMore) {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+        cars = [];
+        currentPage = 1;
+        hasMoreData = true;
+      });
+    } else if (!hasMoreData) {
+      return;
+    }
 
     try {
-      final pickUpDate = selectedDateRange?.start ?? DateTime.now();
-      final dropOffDate = selectedDateRange?.end ?? DateTime.now().add(const Duration(days: 1));
+      final pickUpDate = selectedDateRange?.start ?? DateTime.now().add(Duration(days: 1));
+      final dropOffDate = selectedDateRange?.end ?? DateTime.now().add(Duration(days: 2));
 
-      final carUri = Uri.https(
-        'booking-com15.p.rapidapi.com',
-        '/cars/search',
-        {
-          'city': city,
-          'pickup_date': _formatDate(pickUpDate),
-          'dropoff_date': _formatDate(dropOffDate),
-          'currency': 'USD',
+      final coordinates = cityCoordinates[city] ?? {
+        'latitude': 24.7136,
+        'longitude': 46.6753,
+      };
+
+      final carUri = Uri.parse('https://$carRentalApiHost/v1/car-rental/search').replace(
+        queryParameters: {
+          'pick_up_datetime': _formatDateTime(pickUpDate),
+          'drop_off_datetime': _formatDateTime(dropOffDate),
+          'loc_id_from': '1042171',
+          'loc_id_to': '1042171',
+          'pick_up_latitude': coordinates['latitude'].toString(),
+          'pick_up_longitude': coordinates['longitude'].toString(),
+          'drop_off_latitude': coordinates['latitude'].toString(),
+          'drop_off_longitude': coordinates['longitude'].toString(),
+          'currency': 'SAR',
+          'locale': 'ar',
+          'sort_by': 'price_low_to_high',
+          'from_country': 'ar',
+          'client_country': 'sa',
+          'page': currentPage.toString(),
         },
       );
+
+      print('Fetching cars from URL: $carUri');
 
       final carResponse = await http.get(
         carUri,
         headers: {
           'X-RapidAPI-Key': apiKey,
-          'X-RapidAPI-Host': apiHost,
+          'X-RapidAPI-Host': carRentalApiHost,
         },
       );
 
       print('Car API Response (status=${carResponse.statusCode}):');
-      print(carResponse.body);
+      print('Response Body: ${carResponse.body}');
+      final carData = jsonDecode(carResponse.body);
+      print('Response Keys: ${carData.keys}');
 
       if (carResponse.statusCode == 200) {
-        final carData = jsonDecode(carResponse.body);
-        List<dynamic>? results = carData['cars'] ?? carData['results'];
+        List<dynamic>? results = carData['search_results'];
+        int totalCount = carData['count'] ?? 0;
 
         if (results == null || results.isEmpty) {
-          throw Exception('No cars found in the response');
+          print('No car data found in search_results. Response count: ${carData['count']}');
+          setState(() {
+            isLoading = false;
+            errorMessage = 'No cars available for $city on the selected dates.';
+            hasMoreData = false;
+          });
+          return;
         }
 
+        print('First car in search_results: ${results[0]}');
+
         List<Map<String, dynamic>> mappedCars = results.map((car) {
+          print('vehicle_info: ${car['vehicle_info']}');
+          print('price_info: ${car['price_info']}');
+
           return {
-            'id': car['id']?.toString() ?? 'car_${Random().nextInt(1000)}',
-            'name': car['vehicle_name'] ?? car['vehicleType'] ?? 'Unknown Car',
-            'color': car['color'] ?? 'Unknown Color',
-            'serialNumber': car['license_plate'] ?? 'G ${Random().nextInt(50) + 1}',
-            'pricePerDay': double.tryParse(car['price']?['per_day']?.toString() ?? '0') ?? 50.0,
-            'imageUrl': car['images']?[0]['url'] ?? placeholderImages[Random().nextInt(placeholderImages.length)],
+            'id': car['vehicle_info']?['v_id']?.toString() ?? 'car_${Random().nextInt(1000)}',
+            'name': car['vehicle_info']?['v_name'] ?? 'Unknown Car',
+            'serialNumber': car['vehicle_info']?['license_plate'] ?? 'G ${Random().nextInt(50) + 1}',
+            'pricePerDay': _calculatePricePerDay(
+              car['price_info']?['total_price'] ?? car['price_info']?['price'] ?? car['price'],
+              pickUpDate,
+              dropOffDate,
+              car,
+            ),
+            'imageUrl': car['vehicle_info']?['image']?['url'] ??
+                car['vehicle_info']?['images']?.first?['url'] ??
+                car['vehicle_info']?['image_url'] ??
+                car['supplier_info']?['logo_url'] ??
+                placeholderImages[Random().nextInt(placeholderImages.length)],
           };
         }).toList();
 
         setState(() {
-          cars = mappedCars;
+          cars.addAll(mappedCars);
           isLoading = false;
+          currentPage++;
+          hasMoreData = cars.length < totalCount;
           if (cars.isNotEmpty) {
             print('First Car Data: ${cars[0]}');
           }
         });
       } else {
-        throw Exception('Failed to load cars: ${carResponse.statusCode}');
+        final errorBody = jsonDecode(carResponse.body);
+        final errorDetails = errorBody['detail']?.map((e) => e['msg']).join(', ') ?? 'Unknown error';
+        throw Exception('Failed to load cars: ${carResponse.statusCode} - $errorDetails');
       }
     } catch (e) {
       print('Error fetching cars: $e');
@@ -587,23 +771,73 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
         errorMessage = 'Failed to fetch cars for $city: $e. Using mock data for now.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching cars: $e. Using mock data.')),
+        SnackBar(content: Text(errorMessage!)),
       );
     }
   }
 
+  double _calculatePricePerDay(dynamic priceData, DateTime start, DateTime end, Map<String, dynamic> car) {
+    try {
+      if (priceData != null) {
+        double totalPrice = double.tryParse(priceData.toString()) ?? 50.0;
+        int days = end.difference(start).inDays;
+        if (days <= 0) days = 1;
+        return totalPrice / days;
+      }
+
+      // Fallback pricing based on car category
+      String? category = car['vehicle_info']?['group']?.toString().toLowerCase();
+      if (category == null) return 50.0;
+
+      switch (category) {
+        case 'mini':
+          return 40.0;
+        case 'economy':
+          return 50.0;
+        case 'compact':
+          return 60.0;
+        case 'standard':
+          return 70.0;
+        case 'luxury':
+          return 100.0;
+        default:
+          return 50.0;
+      }
+    } catch (e) {
+      return 50.0;
+    }
+  }
+
+  String _formatDateTime(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:00';
+  }
+
   Future<void> _selectDateRange(BuildContext context) async {
+    final now = DateTime.now();
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: selectedDateRange,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      initialDateRange: selectedDateRange ??
+          DateTimeRange(
+            start: now.add(Duration(days: 1)),
+            end: now.add(Duration(days: 2)),
+          ),
     );
     if (picked != null && picked != selectedDateRange) {
+      final adjustedStart = picked.start.isBefore(now)
+          ? now.add(Duration(minutes: 1))
+          : picked.start;
+      final adjustedEnd = picked.end.isBefore(adjustedStart)
+          ? adjustedStart.add(Duration(days: 1))
+          : picked.end;
+
       setState(() {
-        selectedDateRange = picked;
+        selectedDateRange = DateTimeRange(start: adjustedStart, end: adjustedEnd);
         cars = [];
         hasFetchedCars = false;
+        currentPage = 1;
+        hasMoreData = true;
       });
     }
   }
@@ -627,7 +861,6 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     try {
       final selectedCar = cars.firstWhere((car) => car['id'].toString() == selectedCarId);
       final carName = selectedCar['name'];
-      final carColor = selectedCar['color'];
       final serialNumber = selectedCar['serialNumber'];
       double pricePerDay = selectedCar['pricePerDay'] ?? 0.0;
       int days = selectedDateRange!.end.difference(selectedDateRange!.start).inDays;
@@ -639,7 +872,6 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
         'userId': user.uid,
         'carId': selectedCarId,
         'carName': carName,
-        'carColor': carColor,
         'serialNumber': serialNumber,
         'pricePerDay': pricePerDay,
         'startDate': Timestamp.fromDate(selectedDateRange!.start),
@@ -662,10 +894,6 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
         SnackBar(content: Text('Error creating car reservation: $e')),
       );
     }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   String _generateRandomParkingSpot() {
@@ -700,7 +928,7 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
           return const Scaffold(
             body: Center(
               child: Text(
-                'API key not found. Please add RAPIDAPI_KEY to the .env file.',
+                'API key not found. Please add CAR_RENTAL_API_KEY to the .env file.',
                 style: TextStyle(color: Colors.red, fontSize: 18),
                 textAlign: TextAlign.center,
               ),
@@ -710,10 +938,12 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
 
         if (!hasFetchedCars && cars.isEmpty && errorMessage == null && !isLoading) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() {
-              hasFetchedCars = true;
-            });
-            _fetchCars(snapshot.data!);
+            if (mounted) {
+              setState(() {
+                hasFetchedCars = true;
+              });
+              _fetchCars(snapshot.data!);
+            }
           });
         }
 
@@ -753,7 +983,7 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                           Row(
                             children: List.generate(
                               5,
-                                  (index) => const Icon(Icons.star, color: Colors.yellow, size: 20),
+                                  (index) => Icon(Icons.star, color: Colors.yellow, size: 20),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -794,7 +1024,7 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                          isLoading
+                          isLoading && cars.isEmpty
                               ? const Center(child: CircularProgressIndicator())
                               : cars.isEmpty && errorMessage == null
                               ? const Text('No cars found', style: TextStyle(fontSize: 16))
@@ -803,9 +1033,13 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                               : SizedBox(
                             height: 180,
                             child: ListView.builder(
+                              controller: _scrollController,
                               scrollDirection: Axis.horizontal,
-                              itemCount: cars.length,
+                              itemCount: cars.length + (hasMoreData ? 1 : 0),
                               itemBuilder: (context, index) {
+                                if (index == cars.length && hasMoreData) {
+                                  return const Center(child: CircularProgressIndicator());
+                                }
                                 final car = cars[index];
                                 final carId = car['id'].toString();
                                 final carName = car['name'];
@@ -836,33 +1070,27 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(15),
                                             child: imageUrl.startsWith('http')
-                                                ? Image.network(
-                                              imageUrl,
+                                                ? CachedNetworkImage(
+                                              imageUrl: imageUrl,
                                               fit: BoxFit.cover,
-                                              loadingBuilder: (context, child, loadingProgress) {
-                                                if (loadingProgress == null) return child;
-                                                return const Center(child: CircularProgressIndicator());
-                                              },
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Container(
-                                                  color: Colors.grey,
-                                                  child: const Center(
-                                                    child: Icon(Icons.error, color: Colors.white),
-                                                  ),
-                                                );
-                                              },
+                                              placeholder: (context, url) => const Center(
+                                                  child: CircularProgressIndicator()),
+                                              errorWidget: (context, url, error) => Image.asset(
+                                                placeholderImages[
+                                                index % placeholderImages.length],
+                                                fit: BoxFit.cover,
+                                              ),
                                             )
                                                 : Image.asset(
                                               imageUrl,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Container(
-                                                  color: Colors.grey,
-                                                  child: const Center(
-                                                    child: Icon(Icons.error, color: Colors.white),
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                  Container(
+                                                    color: Colors.grey,
+                                                    child: const Center(
+                                                      child: Icon(Icons.error, color: Colors.white),
+                                                    ),
                                                   ),
-                                                );
-                                              },
                                             ),
                                           ),
                                         ),
@@ -871,7 +1099,8 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                                           width: 200,
                                           child: Text(
                                             carName,
-                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                            style: const TextStyle(
+                                                fontSize: 14, fontWeight: FontWeight.w500),
                                             textAlign: TextAlign.center,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
@@ -886,6 +1115,15 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                           ),
                           const SizedBox(height: 20),
                           if (!isLoading && cars.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                'Note: Prices are estimated and may vary.',
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          if (!isLoading && cars.isNotEmpty)
                             ...cars.map((car) {
                               final carId = car['id'].toString();
                               double price = car['pricePerDay'] ?? 0.0;
@@ -895,18 +1133,22 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
+                                      flex: 2,
                                       child: Text(
                                         car['name'],
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                                         overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
                                     ),
                                     Expanded(
+                                      flex: 1,
                                       child: Text(
-                                        price > 0 ? '\$${price.toStringAsFixed(2)} per day' : 'Price unavailable',
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                        '\$${price.toStringAsFixed(2)}/day',
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                                         textAlign: TextAlign.end,
                                         overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
                                     ),
                                   ],
@@ -944,4 +1186,4 @@ class _CarRentalScreenState extends State<CarRentalScreen> {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     return months[month - 1];
   }
-}*/
+}
